@@ -6,6 +6,7 @@
 #include <json-c/json.h>
 
 #define API_URL_SCHOOLINFO "https://open.neis.go.kr/hub/schoolInfo"
+#define API_URL_MEALSERVICE "https://open.neis.go.kr/hub/mealServiceDietInfo"
 #define INITIAL_BUFFER_SIZE 1024
 #define URL_ENCODE_FACTOR 3
 
@@ -34,6 +35,24 @@ struct SchoolInfo {
   char* DGHT_SC_NM;
   char* FOND_YMD;
   char* FOAS_MEMRD;
+  char* LOAD_DTM;
+};
+
+struct MealInfo {
+  char* ATPT_OFCDC_SC_CODE;
+  char* ATPT_OFCDC_SC_NM;
+  char* SD_SCHUL_CODE;
+  char* SCHUL_NM;
+  char* MMEAL_SC_CODE;
+  char* MMEAL_SC_NM;
+  char* MLSV_YMD;
+  char* MLSV_FGR;
+  char* DDISH_NM;
+  char* ORPLC_INFO;
+  char* CAL_INFO;
+  char* NTR_INFO;
+  char* MLSV_FROM_YMD;
+  char* MLSV_TO_YMD;
   char* LOAD_DTM;
 };
 
@@ -156,10 +175,10 @@ static void free_school_info(struct SchoolInfo* school) {
 
 static char* get_json_string(struct json_object* obj, const char* key) {
   struct json_object* str_obj = json_object_object_get(obj, key);
-  return str_obj ? strdup(json_object_get_string(str_obj)) : strdup("");
+  return str_obj ? strdup(json_object_get_string(str_obj)) : NULL;
 }
 
-static char* fetch_api_data(const char* school_name) {
+struct SchoolInfo** search_school(const char* school_name) {
   CURL* curl = curl_easy_init();
   if (!curl) return NULL;
   
@@ -168,41 +187,32 @@ static char* fetch_api_data(const char* school_name) {
     curl_easy_cleanup(curl);
     return NULL;
   }
-  
+
   char* encoded_name = url_encode(school_name);
   if (!encoded_name) {
     buffer_free(buf);
     curl_easy_cleanup(curl);
     return NULL;
   }
-  
+
   char url[512];
   snprintf(url, sizeof(url), "%s?Type=json&SCHUL_NM=%s", API_URL_SCHOOLINFO, encoded_name);
   free(encoded_name);
-  
+
   curl_easy_setopt(curl, CURLOPT_URL, url);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, buf);
-  
+
   CURLcode res = curl_easy_perform(curl);
   curl_easy_cleanup(curl);
-  
+
   if (res != CURLE_OK) {
     buffer_free(buf);
     return NULL;
   }
-  
-  char* result = strdup(buf->buffer);
-  buffer_free(buf);
-  return result;
-}
 
-struct SchoolInfo** search_school(const char* school_name) {
-  char* response = fetch_api_data(school_name);
-  if (!response) return NULL;
-  
-  struct json_object* root = json_tokener_parse(response);
-  free(response);
+  struct json_object* root = json_tokener_parse(buf->buffer);
+  buffer_free(buf);
   
   if (!root) return NULL;
   
@@ -278,6 +288,122 @@ struct SchoolInfo** search_school(const char* school_name) {
   return schools;
 }
 
+struct MealInfo** search_meal(const char* atptCode, const char* school_code, const char* date) {
+  CURL* curl = curl_easy_init();
+  if (!curl) return NULL;
+  
+  Buffer* buf = buffer__new();
+  if (!buf) {
+    curl_easy_cleanup(curl);
+    return NULL;
+  }
+  
+  char url[512];
+  snprintf(url, sizeof(url), "%s?Type=json&ATPT_OFCDC_SC_CODE=%s&SD_SCHUL_CODE=%s&MLSV_YMD=%s",
+           API_URL_MEALSERVICE, atptCode, school_code, date);
+  
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, buf);
+
+  CURLcode res = curl_easy_perform(curl);
+  curl_easy_cleanup(curl);
+
+  if (res != CURLE_OK) {
+    buffer_free(buf);
+    return NULL;
+  }
+
+  struct json_object* root = json_tokener_parse(buf->buffer);
+  buffer_free(buf);
+
+  if (!root) return NULL;
+
+  struct json_object* meal_info = NULL;
+
+  if (!json_object_object_get_ex(root, "mealServiceDietInfo", &meal_info)) {
+    json_object_put(root);
+    return NULL;
+  }
+
+  struct json_object* row_container = json_object_array_get_idx(meal_info, 1);
+  if (!row_container) {
+    json_object_put(root);
+    return NULL;
+  }
+
+  struct json_object* rows = NULL;
+  if (!json_object_object_get_ex(row_container, "row", &rows)) {
+    json_object_put(root);
+    return NULL;
+  }
+
+  int count = json_object_array_length(rows);
+  struct MealInfo** meals = calloc(count + 1, sizeof(struct MealInfo*));
+  if (!meals) {
+    json_object_put(root);
+    return NULL;
+  }
+
+  for (int i = 0; i < count; i++) {
+    struct json_object* meal_obj = json_object_array_get_idx(rows, i);
+    struct MealInfo* meal = calloc(1, sizeof(struct MealInfo));
+    
+    if (!meal) {
+      for (int j = 0; j < i; j++) {
+        free(meals[j]);
+      }
+      free(meals);
+      json_object_put(root);
+      return NULL;
+    }
+    
+    meal->ATPT_OFCDC_SC_CODE = get_json_string(meal_obj, "ATPT_OFCDC_SC_CODE");
+    meal->ATPT_OFCDC_SC_NM = get_json_string(meal_obj, "ATPT_OFCDC_SC_NM");
+    meal->SD_SCHUL_CODE = get_json_string(meal_obj, "SD_SCHUL_CODE");
+    meal->SCHUL_NM = get_json_string(meal_obj, "SCHUL_NM");
+    meal->MMEAL_SC_CODE = get_json_string(meal_obj, "MMEAL_SC_CODE");
+    meal->MMEAL_SC_NM = get_json_string(meal_obj, "MMEAL_SC_NM");
+    meal->MLSV_YMD = get_json_string(meal_obj, "MLSV_YMD");
+    meal->MLSV_FGR = get_json_string(meal_obj, "MLSV_FGR");
+    meal->DDISH_NM = get_json_string(meal_obj, "DDISH_NM");
+    meal->ORPLC_INFO = get_json_string(meal_obj, "ORPLC_INFO");
+    meal->CAL_INFO = get_json_string(meal_obj, "CAL_INFO");
+    meal->NTR_INFO = get_json_string(meal_obj, "NTR_INFO");
+    meal->MLSV_FROM_YMD = get_json_string(meal_obj, "MLSV_FROM_YMD");
+    meal->MLSV_TO_YMD = get_json_string(meal_obj, "MLSV_TO_YMD");
+    meal->LOAD_DTM = get_json_string(meal_obj, "LOAD_DTM");
+    
+    meals[i] = meal;
+  }
+
+  meals[count] = NULL;
+  json_object_put(root);
+
+  return meals;
+}
+
+void free_meal_info(struct MealInfo* meal) {
+  if (!meal) return;
+  
+  free(meal->ATPT_OFCDC_SC_CODE);
+  free(meal->ATPT_OFCDC_SC_NM);
+  free(meal->SD_SCHUL_CODE);
+  free(meal->SCHUL_NM);
+  free(meal->MMEAL_SC_CODE);
+  free(meal->MMEAL_SC_NM);
+  free(meal->MLSV_YMD);
+  free(meal->MLSV_FGR);
+  free(meal->DDISH_NM);
+  free(meal->ORPLC_INFO);
+  free(meal->CAL_INFO);
+  free(meal->NTR_INFO);
+  free(meal->MLSV_FROM_YMD);
+  free(meal->MLSV_TO_YMD);
+  free(meal->LOAD_DTM);
+  free(meal);
+}
+
 int main(int argc, char* argv[]) {
   if (argc != 3 || strcmp(argv[1], "search") != 0) {
     fprintf(stderr, "Usage: %s search <school_name>\n", argv[0]);
@@ -292,6 +418,7 @@ int main(int argc, char* argv[]) {
   
   for (int i = 0; schools[i] != NULL; i++) {
     printf("\n=== School #%d Information ===\n", i + 1);
+    printf("Regional Education Office Code: %s\n", schools[i]->ATPT_OFCDC_SC_CODE);
     printf("Education Office Code: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
     printf("Name of the Education Office: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
     printf("Administrative Standard Code: %s\n", schools[i]->SD_SCHUL_CODE);
