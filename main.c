@@ -2,20 +2,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 #include <curl/curl.h>
 #include <json-c/json.h>
 #include "traytoday.h"
+#include "error.h"
+#include "file.h"
 #include "buffer.h"
 #include "info/school.h"
 #include "client.h"
 
-int main(int argc, char* argv[]) {
-  if (argc != 3 || strcmp(argv[1], "search") != 0) {
-    fprintf(stderr, "Usage: %s search <school_name>\n", argv[0]);
-    return 1;
-  }
-  
-  struct SchoolInfo** schools = search_school(argv[2]);
+int handle_search_school(char* schulNm) {
+  struct SchoolInfo** schools = search_school(schulNm);
   if (!schools) {
     fprintf(stderr, "Failed to find school information\n");
     return 1;
@@ -25,7 +23,7 @@ int main(int argc, char* argv[]) {
     printf("\n=== School #%d Information ===\n", i + 1);
     printf("Regional Education Office Code: %s\n", schools[i]->ATPT_OFCDC_SC_CODE);
     printf("Education Office Code: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
-    printf("Name of the Education Office: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
+    printf("NamSe of the Education Office: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
     printf("Administrative Standard Code: %s\n", schools[i]->SD_SCHUL_CODE);
     printf("School Name: %s\n", schools[i]->SCHUL_NM);
     printf("English School Name: %s\n", schools[i]->ENG_SCHUL_NM);
@@ -52,7 +50,35 @@ int main(int argc, char* argv[]) {
     printf("===============================\n");
     free_school_info(schools[i]);
   }
-  
   free(schools);
   return 0;
+}
+
+int handle_command(int argc, char* argv[]) {
+  assert(argc >= 2 && "argc must be greater than or equal to 2");
+  if (strcmp(argv[1], "search") == 0) {
+    if (argc < 3) {
+      fprintf(stderr, "Usage: %s search <school name>\n", argv[0]);
+      return 1;
+    }
+    return handle_search_school(argv[2]);
+  }
+  
+  fprintf(stderr, "Unknown command: %s\n", argv[1]);
+  return 1;
+}
+
+int main(int argc, char* argv[]) {
+  ensure_directory_exist(TRAYTODAY_ROOT_DIR);
+  if (argc < 2) {
+    struct Version read_version;
+    struct Settings read_settings;
+    int result = read_setting_file(CONFIG_PATH, &read_version, &read_settings);
+    if (result != ERRCODE_OK) {
+      fprintf(stderr, "Usage: %s <command> [..args]\n", argv[0]);
+      return 1;
+    }
+  }
+  
+  return handle_command(argc, argv);
 }

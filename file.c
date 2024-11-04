@@ -1,10 +1,89 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "traytoday.h"
 #include "error.h"
 #include "utils/crc32.h"
 #include "file.h"
+
+char* expand_home_directory(const char* path) {
+  if (path[0] == '~') {
+    const char* home = getenv("HOME");
+    if (home == NULL) {
+      fprintf(stderr, "Could not get HOME environment variable.");
+      return NULL;
+    }
+
+    size_t len = strlen(home) + strlen(path); 
+    char* expanded_path = (char*)malloc(len);
+
+    snprintf(expanded_path, len, "%s%s", home, path + 1); 
+    return expanded_path;
+  }
+  return strdup(path);
+}
+
+int ensure_directory_exist(const char *dp) {
+  struct stat st;
+  char* expanded_path = expand_home_directory(dp);
+
+  if (stat(expanded_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+    free(expanded_path);
+    return 0;
+  }
+
+  char *parent_path = strdup(expanded_path);
+  char *last_slash = strrchr(parent_path, '/');
+  
+  if (last_slash != NULL && last_slash != parent_path) {
+    *last_slash = '\0';
+    ensure_directory_exist(parent_path);
+  }
+
+  if (mkdir(expanded_path, 0755) != 0) {
+    if (errno != EEXIST) {
+      perror("mkdir failed");
+      free(parent_path);
+      free(expanded_path);
+      return -1;
+    }
+  }
+
+  free(parent_path);
+  free(expanded_path);
+  return 0;
+}
+
+int ensure_file_exist(const char *fp) {
+  char* expanded_path = expand_home_directory(fp);
+  int fd = open(expanded_path, O_CREAT | O_EXCL, 0644);
+  if (fd == -1) {
+    if (errno == EEXIST) {
+      return 0;
+    } else {
+      perror("open failed");
+      return -1;
+    }
+  }
+  close(fd);
+  free(expanded_path);
+  return 0;
+}
+
+bool file_exists(const char *fp) {
+  struct stat st;
+  char* expanded_path = expand_home_directory(fp);
+  bool exists = stat(expanded_path, &st) == 0;
+  free(expanded_path);
+  return exists;
+}
 
 static void encode_data(unsigned char *data, size_t len, uint32_t key) {
   for (size_t i = 0; i < len; i++)
