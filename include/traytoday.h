@@ -13,10 +13,10 @@ struct Version {
 };
 
 struct Settings {
-  char language[2];
+  char language[3];
   char edu_code[10];
   char school_code[10];
 };
 
-#define VERSION (struct Version) { 0, 1, 0, 2 }
+#define VERSION (struct Version) { 0, 1, 0, 3 }
 #endif // __TRAYTODAY_TRAYTODAY_H__

@@ -9,8 +9,21 @@
 #include "error.h"
 #include "file.h"
 #include "buffer.h"
-#include "info/school.h"
 #include "client.h"
+#include "utils/color.h"
+#include "info/school.h"
+#include "info/meal.h"
+#include "client.h"
+
+size_t strlcpy(char *dst, const char *src, size_t size) {
+  size_t src_len = strlen(src);
+  if (size > 0) {
+    size_t copy_len = (src_len >= size) ? size - 1 : src_len;
+    memcpy(dst, src, copy_len);
+    dst[copy_len] = '\0';
+  }
+  return src_len;
+}
 
 int handle_search_school(char* schulNm) {
   struct SchoolInfo** schools = search_school(schulNm);
@@ -22,7 +35,7 @@ int handle_search_school(char* schulNm) {
   for (int i = 0; schools[i] != NULL; i++) {
     printf("\n=== School #%d Information ===\n", i + 1);
     printf("Regional Education Office Code: %s\n", schools[i]->ATPT_OFCDC_SC_CODE);
-    printf("Education Office Code: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
+    printf("Education Office Name: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
     printf("NamSe of the Education Office: %s\n", schools[i]->ATPT_OFCDC_SC_NM);
     printf("Administrative Standard Code: %s\n", schools[i]->SD_SCHUL_CODE);
     printf("School Name: %s\n", schools[i]->SCHUL_NM);
@@ -54,6 +67,50 @@ int handle_search_school(char* schulNm) {
   return 0;
 }
 
+int handle_set_school(char* schulNm) {
+  struct SchoolInfo** schools = search_school(schulNm);
+  if (!schools) {
+    fprintf(stderr, "Failed to find school information\n");
+    return 1;
+  }
+
+  for (int i = 0; schools[i] != NULL; i++)
+     printf(ANSI_COLOR_BOLD_YELLOW "%d. " ANSI_COLOR_RESET "%s (%s)\n  " ANSI_COLOR_BOLD_WHITE "- %s %s" ANSI_COLOR_RESET "\n",
+           i + 1,
+           schools[i]->SCHUL_NM,
+           schools[i]->ATPT_OFCDC_SC_NM,
+           schools[i]->ORG_RDNMA,
+           schools[i]->ORG_RDNDA);
+
+  printf("> ");
+  int school_number;
+  if (scanf("%d", &school_number) != 1) {
+    fprintf(stderr, "Invalid input\n");
+    return 1;
+  }
+
+  if (school_number < 1 || schools[school_number - 1] == NULL) {
+    fprintf(stderr, "Invalid school number\n");
+    return 1;
+  }
+
+  struct Settings settings;
+  strlcpy(settings.language, "ko", sizeof(settings.language));
+  strlcpy(settings.edu_code, schools[school_number - 1]->ATPT_OFCDC_SC_CODE, sizeof(settings.edu_code));
+  strlcpy(settings.school_code, schools[school_number - 1]->SD_SCHUL_CODE, sizeof(settings.school_code));
+
+  char* expanded_path = expand_home_directory(CONFIG_PATH);
+  int result = write_setting_file(expanded_path, VERSION, settings);
+  free(expanded_path);
+  if (result != ERRCODE_OK) {
+    fprintf(stderr, "Failed to write setting file %d\n", result);
+    return 1;
+  }
+
+  printf("Successfully set the school\n");
+  return 0;
+}
+
 int handle_command(int argc, char* argv[]) {
   assert(argc >= 2 && "argc must be greater than or equal to 2");
   if (strcmp(argv[1], "search") == 0) {
@@ -62,6 +119,12 @@ int handle_command(int argc, char* argv[]) {
       return 1;
     }
     return handle_search_school(argv[2]);
+  } else if (strcmp(argv[1], "set") == 0) {
+    if (argc < 3) {
+      fprintf(stderr, "Usage: %s set <school name>\n", argv[0]);
+      return 1;
+    }
+    return handle_set_school(argv[2]);
   }
   
   fprintf(stderr, "Unknown command: %s\n", argv[1]);
@@ -73,11 +136,23 @@ int main(int argc, char* argv[]) {
   if (argc < 2) {
     struct Version read_version;
     struct Settings read_settings;
-    int result = read_setting_file(CONFIG_PATH, &read_version, &read_settings);
+    char* expanded_path = expand_home_directory(CONFIG_PATH);
+    int result = read_setting_file(expanded_path, &read_version, &read_settings);
+    free(expanded_path);
     if (result != ERRCODE_OK) {
       fprintf(stderr, "Usage: %s <command> [..args]\n", argv[0]);
       return 1;
     }
+
+    struct SchoolInfo* school = get_school(read_settings.edu_code, read_settings.school_code);
+    if (!school) {
+      fprintf(stderr, "Failed to get school information\n");
+      return 1;
+    }
+
+    printf("%s\n", school->SCHUL_NM);
+    free_school_info(school);
+    return 0;
   }
   
   return handle_command(argc, argv);
