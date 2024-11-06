@@ -11,6 +11,7 @@
 #include "buffer.h"
 #include "client.h"
 #include "utils/color.h"
+#include "utils/time.h"
 #include "info/school.h"
 #include "info/meal.h"
 #include "client.h"
@@ -23,6 +24,37 @@ size_t strlcpy(char *dst, const char *src, size_t size) {
     dst[copy_len] = '\0';
   }
   return src_len;
+}
+
+char* replace(const char* str, const char* find, const char* replace) {
+  size_t find_len = strlen(find);
+  size_t replace_len = strlen(replace);
+  int count = 0;
+  const char* tmp = str;
+  while ((tmp = strstr(tmp, find)) != NULL) {
+    tmp += find_len;
+    count++;
+  }
+
+  size_t result_len = strlen(str) + (replace_len - find_len) * (size_t)count + 1;
+  char* result = (char*)malloc(result_len);
+  if (!result) {
+    return NULL;
+  }
+
+  char* ins;
+  char* res_ptr = result;
+  while (count--) {
+    ins = strstr(str, find);
+    size_t len = (size_t)(ins - str);
+    memcpy(res_ptr, str, len);
+    res_ptr += len;
+    memcpy(res_ptr, replace, replace_len);
+    res_ptr += replace_len;
+    str = ins + find_len;
+  }
+  strcpy(res_ptr, str);
+  return result;
 }
 
 int handle_search_school(char* schulNm) {
@@ -150,8 +182,24 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    printf("%s\n", school->SCHUL_NM);
-    free_school_info(school);
+    char time_str[32];
+    get_current_time(time_str, sizeof(time_str));
+    struct MealInfo** meals = search_meal(school->ATPT_OFCDC_SC_CODE, school->SD_SCHUL_CODE, time_str);
+
+    if (!meals) {
+      fprintf(stderr, "Failed to get meal information\n");
+      return 1;
+    }
+
+    for (int i = 0; meals[i] != NULL; i++) {
+      if (i > 0) printf("\n");
+      printf("============== %s ==============\n", meals[i]->MMEAL_SC_NM);
+      char* meal = replace(meals[i]->DDISH_NM, "<br/>", "\n");
+      printf("%s", meal);
+      free(meal);
+      free_meal_info(meals[i]);
+      if (meals[i + 1] == NULL) printf("\n==================================\n");
+    }
     return 0;
   }
   
