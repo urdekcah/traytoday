@@ -1,6 +1,6 @@
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use crate::{Error, Result};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config {
