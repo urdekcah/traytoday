@@ -1,7 +1,17 @@
 [package]
 name = "traytoday"
+authors = ["urdekcah <ya@urdekcah.ru>"]
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3"
+readme = "README.md"
+description = "A Rust program that provides a glance at today's school meal menu."
+keywords = ["traytoday", "school", "meal"]
+homepage = "https://github.com/urdekcah/traytoday/"
+repository = "https://github.com/urdekcah/traytoday/"
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 tokio = { version = "1.42.0", features = ["full"] }
