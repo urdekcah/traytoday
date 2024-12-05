@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::fmt;
 use std::io::Write;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use traytoday::client::NeisClient;
@@ -78,7 +79,31 @@ async fn main() -> Result<()> {
       println!("School set to {}", school.schul_nm);
     }
     None => {
-      println!("No command provided");
+      let config = traytoday::config::Config::load()?;
+      if config.edu_code.is_empty() || config.school_code.is_empty() {
+        println!("No school set. Use `traytoday set` to set your school.");
+      } else {
+        let date = chrono::Local::now().format("%Y%m%d").to_string();
+        let meals = client
+          .get_meals(&config.edu_code, &config.school_code, &date)
+          .await?;
+        if meals.is_empty() {
+          println!("No meals found for today.");
+        }
+        let mut stdout = StandardStream::stdout(ColorChoice::Always);
+        for (i, meal) in meals.iter().enumerate() {
+          stdout
+            .set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::White)))
+            .map_err(|_| fmt::Error)?;
+          write!(&mut stdout, "{}. ", i + 1)?;
+          stdout
+            .set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::Yellow)))
+            .map_err(|_| fmt::Error)?;
+          writeln!(&mut stdout, "{}", meal.mmeal_sc_nm)?;
+          stdout.reset().map_err(|_| fmt::Error)?;
+          writeln!(&mut stdout, "{}", meal)?;
+        }
+      }
     }
   }
 

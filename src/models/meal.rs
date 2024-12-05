@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -18,4 +19,10 @@ pub struct Meal {
   pub mlsv_from_ymd: String,
   pub mlsv_to_ymd: String,
   pub load_dtm: String,
+}
+
+impl fmt::Display for Meal {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "   {}", self.ddish_nm.replace("<br/>", "\n   "))
+  }
 }

@@ -56,8 +56,6 @@ impl NeisClient {
       .append_pair("MLSV_YMD", date)
       .finish();
 
-    println!("{}", url.as_str());
-
     let response: Value = self.client.get(url.as_str()).send().await?.json().await?;
     let meals = response["mealServiceDietInfo"][1]["row"]
       .as_array()
