@@ -13,3 +13,5 @@ url = "2.5.4"
 anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
 termcolor = "1"
+toml = "0.8.19"
+home = "0.5.9"

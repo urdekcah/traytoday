@@ -2,6 +2,7 @@ use thiserror::Error;
 
 pub mod client;
 pub mod models;
+pub mod config;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -13,6 +14,12 @@ pub enum Error {
   ConfigError(String),
   #[error("IO error: {0}")]
   IoError(#[from] std::io::Error),
+  #[error("Failed to get home directory")]
+  HomeError,
+  #[error("TOML parsing error: {0}")]
+  TomlError(#[from] toml::de::Error),
+  #[error("TOML serialization error: {0}")]
+  TomlSerError(#[from] toml::ser::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
