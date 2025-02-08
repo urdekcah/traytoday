@@ -2,7 +2,9 @@ use anyhow::Result;
 use clap::{arg, Args, Parser, Subcommand};
 use std::io::Write;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use traytoday::{client::NeisClient, config::Config, models::Meal, utils::date::*};
+use traytoday::{
+  allergens::AllergenChecker, client::NeisClient, config::Config, models::Meal, utils::date::*,
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,12 +32,22 @@ enum Commands {
   },
   #[command(about = "Show meals for specific date(s)")]
   Date(DateCommand),
+  #[command(about = "Check for allergens in meals")]
+  Alert(AlertCommand),
 }
 
 #[derive(Args)]
 struct DateCommand {
   #[arg(help = "Date specification (e.g., 2023-10-05, tomorrow, week)")]
   date: String,
+}
+
+#[derive(Args)]
+struct AlertCommand {
+  #[arg(long, help = "Allergen to check for")]
+  allergen: String,
+  #[arg(help = "Date specification (optional)")]
+  date: Option<String>,
 }
 
 #[tokio::main]
@@ -100,6 +112,9 @@ async fn main() -> Result<()> {
     Some(Commands::Date(cmd)) => {
       handle_date_command(&client, &config, &cmd).await?;
     }
+    Some(Commands::Alert(cmd)) => {
+      handle_alert_command(&client, &config, &cmd).await?;
+    }
     None => {
       if config.edu_code.is_empty() || config.school_code.is_empty() {
         println!("No school set. Use `traytoday set` to set your school.");
@@ -138,7 +153,28 @@ async fn handle_date_command(
   Ok(())
 }
 
-fn print_meals(meals: &[Meal], allergen: Option<u8>) -> Result<()> {
+async fn handle_alert_command(
+  client: &NeisClient,
+  config: &Config,
+  cmd: &AlertCommand,
+) -> Result<()> {
+  let date = cmd.date.as_deref().unwrap_or("today");
+  let date_str = parse_date(date)?;
+  let checker = AllergenChecker::new();
+  let allergens = cmd
+    .allergen
+    .split(",")
+    .map(|a| a.trim())
+    .map(|a| checker.get_number(a).unwrap_or(0))
+    .collect::<Vec<_>>();
+  let meals = client
+    .get_meals_for_dates(&config.edu_code, &config.school_code, &[date_str])
+    .await?;
+
+  print_meals(&meals, Some(allergens))
+}
+
+fn print_meals(meals: &[Meal], allergens: Option<Vec<u8>>) -> Result<()> {
   if meals.is_empty() {
     return Ok(());
   }
@@ -166,12 +202,12 @@ fn print_meals(meals: &[Meal], allergen: Option<u8>) -> Result<()> {
     stdout.reset()?;
 
     let dish = &meal.ddish_nm;
-    if let Some(allergen_num) = allergen {
+    if let Some(allergens) = &allergens {
       let marked_dish = dish
         .split("<br/>")
         .map(|item| {
-          if item.contains(&format!("{}", allergen_num)) {
-            format!("\x1b[31m{}\x1b[0m", item) // Red color for allergens
+          if allergens.iter().any(|a| item.contains(&format!("{}", a))) {
+            format!("\x1b[31m{}\x1b[0m", item)
           } else {
             item.to_string()
           }

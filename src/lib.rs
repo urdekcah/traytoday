@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+pub mod allergens;
 pub mod client;
 pub mod config;
 pub mod models;
@@ -25,6 +26,8 @@ pub enum Error {
   ApiError(String),
   #[error("Date parsing error: {0}")]
   DateError(#[from] chrono::ParseError),
+  #[error("Invalid allergen: {0}")]
+  AllergenError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
