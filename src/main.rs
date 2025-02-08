@@ -1,9 +1,8 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
-use std::fmt;
+use clap::{arg, Args, Parser, Subcommand};
 use std::io::Write;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use traytoday::client::NeisClient;
+use traytoday::{client::NeisClient, config::Config, models::Meal, utils::date::*};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -29,6 +28,14 @@ enum Commands {
     #[arg(help = "API key to set")]
     key: String,
   },
+  #[command(about = "Show meals for specific date(s)")]
+  Date(DateCommand),
+}
+
+#[derive(Args)]
+struct DateCommand {
+  #[arg(help = "Date specification (e.g., 2023-10-05, tomorrow, week)")]
+  date: String,
 }
 
 #[tokio::main]
@@ -90,6 +97,9 @@ async fn main() -> Result<()> {
       new_config.save()?;
       println!("API key set");
     }
+    Some(Commands::Date(cmd)) => {
+      handle_date_command(&client, &config, &cmd).await?;
+    }
     None => {
       if config.edu_code.is_empty() || config.school_code.is_empty() {
         println!("No school set. Use `traytoday set` to set your school.");
@@ -98,23 +108,80 @@ async fn main() -> Result<()> {
         let meals = client
           .get_meals_for_dates(&config.edu_code, &config.school_code, &[date])
           .await?;
-        if meals[0].is_empty() {
+        if meals.is_empty() {
           println!("No meals found for today.");
         }
-        let mut stdout = StandardStream::stdout(ColorChoice::Always);
-        for (i, meal) in meals[0].iter().enumerate() {
-          stdout
-            .set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::White)))
-            .map_err(|_| fmt::Error)?;
-          write!(&mut stdout, "{}. ", i + 1)?;
-          stdout
-            .set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::Yellow)))
-            .map_err(|_| fmt::Error)?;
-          writeln!(&mut stdout, "{}", meal.mmeal_sc_nm)?;
-          stdout.reset().map_err(|_| fmt::Error)?;
-          writeln!(&mut stdout, "{}", meal)?;
-        }
+        print_meals(&meals, None)?;
       }
+    }
+  }
+
+  Ok(())
+}
+
+async fn handle_date_command(
+  client: &NeisClient,
+  config: &Config,
+  cmd: &DateCommand,
+) -> Result<()> {
+  let dates = match cmd.date.to_lowercase().as_str() {
+    "week" => get_week_dates(),
+    date => vec![parse_date(date)?],
+  };
+
+  let meals = client
+    .get_meals_for_dates(&config.edu_code, &config.school_code, &dates)
+    .await?;
+
+  print_meals(&meals, None)?;
+
+  Ok(())
+}
+
+fn print_meals(meals: &[Meal], allergen: Option<u8>) -> Result<()> {
+  if meals.is_empty() {
+    return Ok(());
+  }
+
+  let mut stdout = StandardStream::stdout(ColorChoice::Always);
+  let mut current_date = String::new();
+
+  for meal in meals {
+    if meal.mlsv_ymd != current_date {
+      if !current_date.is_empty() {
+        writeln!(&mut stdout)?;
+      }
+      current_date = meal.mlsv_ymd.clone();
+      stdout.set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::Green)))?;
+      writeln!(
+        &mut stdout,
+        "============== {} ==============",
+        print_date_pretty(&current_date)?
+      )?;
+      stdout.reset()?;
+    }
+
+    stdout.set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::White)))?;
+    write!(&mut stdout, "{}: ", meal.mmeal_sc_nm)?;
+    stdout.reset()?;
+
+    let dish = &meal.ddish_nm;
+    if let Some(allergen_num) = allergen {
+      let marked_dish = dish
+        .split("<br/>")
+        .map(|item| {
+          if item.contains(&format!("{}", allergen_num)) {
+            format!("\x1b[31m{}\x1b[0m", item) // Red color for allergens
+          } else {
+            item.to_string()
+          }
+        })
+        .collect::<Vec<_>>()
+        .join("\n   ");
+
+      writeln!(&mut stdout, "\n   {}", marked_dish)?;
+    } else {
+      writeln!(&mut stdout, "\n   {}", dish.replace("<br/>", "\n   "))?;
     }
   }
 

@@ -39,7 +39,7 @@ impl NeisClient {
     atpt_code: &str,
     school_code: &str,
     dates: &[String],
-  ) -> Result<Vec<Vec<Meal>>> {
+  ) -> Result<Vec<Meal>> {
     let mut all_meals = Vec::new();
 
     for date in dates {
@@ -55,7 +55,7 @@ impl NeisClient {
 
       self.validate_response(&response)?;
       let meals = self.parse_meals(&response).unwrap_or_default();
-      all_meals.push(meals);
+      all_meals.extend(meals);
     }
 
     Ok(all_meals)

@@ -3,6 +3,7 @@ use thiserror::Error;
 pub mod client;
 pub mod config;
 pub mod models;
+pub mod utils;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -22,6 +23,8 @@ pub enum Error {
   TomlSerError(#[from] toml::ser::Error),
   #[error("API error: {0}")]
   ApiError(String),
+  #[error("Date parsing error: {0}")]
+  DateError(#[from] chrono::ParseError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
