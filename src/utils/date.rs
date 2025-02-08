@@ -5,7 +5,36 @@ pub fn parse_date(date_str: &str) -> Result<String> {
   let today = Local::now().date_naive();
 
   match date_str.to_lowercase().as_str() {
+    "ereyesterday" => Ok((today - Duration::days(2)).format("%Y%m%d").to_string()),
+    "yesterday" => Ok((today - Duration::days(1)).format("%Y%m%d").to_string()),
     "today" => Ok(today.format("%Y%m%d").to_string()),
+    "tomorrow" => Ok((today + Duration::days(1)).format("%Y%m%d").to_string()),
+    "postmorrow" => Ok((today + Duration::days(2)).format("%Y%m%d").to_string()),
+    "monday" | "tuesday" | "wednesday" | "thursday" | "friday" => {
+      let days_until = match date_str {
+        "monday" => 0,
+        "tuesday" => 1,
+        "wednesday" => 2,
+        "thursday" => 3,
+        "friday" => 4,
+        _ => 0,
+      };
+
+      let date = get_week_dates()[days_until].clone();
+      Ok(date)
+    }
+    "mon" | "tue" | "wed" | "thu" | "fri" => {
+      let days_until = match date_str {
+        "mon" => 0,
+        "tue" => 1,
+        "wed" => 2,
+        "thu" => 3,
+        "fri" => 4,
+        _ => 0,
+      };
+      let date = get_week_dates()[days_until].clone();
+      Ok(date)
+    }
     _ => {
       let date =
         chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").map_err(|e| Error::DateError(e))?;
