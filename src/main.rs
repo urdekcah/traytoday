@@ -24,12 +24,18 @@ enum Commands {
     #[arg(help = "School name to set")]
     name: String,
   },
+  #[command(about = "Set API key")]
+  SetKey {
+    #[arg(help = "API key to set")]
+    key: String,
+  },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
   let args = Cli::parse();
-  let client = NeisClient::new();
+  let config = traytoday::config::Config::load()?;
+  let client = NeisClient::new(&config);
 
   match args.command {
     Some(Commands::Search { name }) => {
@@ -78,8 +84,13 @@ async fn main() -> Result<()> {
       new_config.save()?;
       println!("School set to {}", school.schul_nm);
     }
+    Some(Commands::SetKey { key }) => {
+      let mut new_config = config.clone();
+      new_config.api_key = Some(key);
+      new_config.save()?;
+      println!("API key set");
+    }
     None => {
-      let config = traytoday::config::Config::load()?;
       if config.edu_code.is_empty() || config.school_code.is_empty() {
         println!("No school set. Use `traytoday set` to set your school.");
       } else {

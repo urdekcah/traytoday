@@ -20,6 +20,8 @@ pub enum Error {
   TomlError(#[from] toml::de::Error),
   #[error("TOML serialization error: {0}")]
   TomlSerError(#[from] toml::ser::Error),
+  #[error("API error: {0}")]
+  ApiError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -10,6 +10,8 @@ pub struct Config {
   pub edu_code: String,
   #[serde(default)]
   pub school_code: String,
+  #[serde(default)]
+  pub api_key: Option<String>,
 }
 
 fn default_language() -> String {
@@ -56,6 +58,7 @@ impl Config {
     self.language = new_config.language;
     self.edu_code = new_config.edu_code;
     self.school_code = new_config.school_code;
+    self.api_key = new_config.api_key;
   }
 }
 
@@ -65,6 +68,7 @@ impl Default for Config {
       language: default_language(),
       edu_code: String::new(),
       school_code: String::new(),
+      api_key: None,
     }
   }
 }

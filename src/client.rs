@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::models::{Meal, School};
 use crate::{Error, Result};
 use reqwest::Client;
@@ -10,12 +11,14 @@ const MEAL_SERVICE_ENDPOINT: &str = "/hub/mealServiceDietInfo";
 
 pub struct NeisClient {
   client: Client,
+  config: Config,
 }
 
 impl NeisClient {
-  pub fn new() -> Self {
+  pub fn new(config: &Config) -> Self {
     Self {
       client: Client::new(),
+      config: config.clone(),
     }
   }
 
@@ -26,7 +29,21 @@ impl NeisClient {
       .append_pair("SCHUL_NM", school_name)
       .finish();
 
+    if let Some(api_key) = &self.config.api_key {
+      url.query_pairs_mut().append_pair("KEY", api_key).finish();
+    }
+
     let response: Value = self.client.get(url.as_str()).send().await?.json().await?;
+
+    if let Some(result) = response["RESULT"].as_object() {
+      if !["INFO-200", "INFO-000"].contains(&result["CODE"].as_str().unwrap_or("Unknown error")) {
+        return Err(Error::ApiError(format!(
+          "API Error: {}",
+          result["MESSAGE"].as_str().unwrap_or("Unknown error")
+        )));
+      }
+    }
+
     if let Some(result) = response["schoolInfo"][0]["head"][1]["RESULT"].as_object() {
       if result["CODE"] == "INFO-200" {
         return Ok(Vec::new());
@@ -56,7 +73,20 @@ impl NeisClient {
       .append_pair("MLSV_YMD", date)
       .finish();
 
+    if let Some(api_key) = &self.config.api_key {
+      url.query_pairs_mut().append_pair("KEY", api_key).finish();
+    }
+
     let response: Value = self.client.get(url.as_str()).send().await?.json().await?;
+    if let Some(result) = response["RESULT"].as_object() {
+      if !["INFO-200", "INFO-000"].contains(&result["CODE"].as_str().unwrap_or("Unknown error")) {
+        return Err(Error::ApiError(format!(
+          "API Error: {}",
+          result["MESSAGE"].as_str().unwrap_or("Unknown error")
+        )));
+      }
+    }
+
     let meals = response["mealServiceDietInfo"][1]["row"]
       .as_array()
       .unwrap_or(&vec![])
@@ -80,11 +110,5 @@ impl NeisClient {
     url.set_path(MEAL_SERVICE_ENDPOINT);
     url.query_pairs_mut().append_pair("Type", "json");
     Ok(url)
-  }
-}
-
-impl Default for NeisClient {
-  fn default() -> Self {
-    Self::new()
   }
 }
