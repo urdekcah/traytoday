@@ -96,13 +96,13 @@ async fn main() -> Result<()> {
       } else {
         let date = chrono::Local::now().format("%Y%m%d").to_string();
         let meals = client
-          .get_meals(&config.edu_code, &config.school_code, &date)
+          .get_meals_for_dates(&config.edu_code, &config.school_code, &[date])
           .await?;
-        if meals.is_empty() {
+        if meals[0].is_empty() {
           println!("No meals found for today.");
         }
         let mut stdout = StandardStream::stdout(ColorChoice::Always);
-        for (i, meal) in meals.iter().enumerate() {
+        for (i, meal) in meals[0].iter().enumerate() {
           stdout
             .set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::White)))
             .map_err(|_| fmt::Error)?;
