@@ -11,6 +11,8 @@ use traytoday::{
 struct Cli {
   #[command(subcommand)]
   command: Option<Commands>,
+  #[arg(long, help = "Allergen to check for")]
+  allergen: String,
 }
 
 #[derive(Subcommand)]
@@ -32,22 +34,14 @@ enum Commands {
   },
   #[command(about = "Show meals for specific date(s)")]
   Date(DateCommand),
-  #[command(about = "Check for allergens in meals")]
-  Alert(AlertCommand),
 }
 
 #[derive(Args)]
 struct DateCommand {
   #[arg(help = "Date specification (e.g., 2023-10-05, tomorrow, week)")]
   date: String,
-}
-
-#[derive(Args)]
-struct AlertCommand {
   #[arg(long, help = "Allergen to check for")]
   allergen: String,
-  #[arg(help = "Date specification (optional)")]
-  date: Option<String>,
 }
 
 #[tokio::main]
@@ -112,13 +106,17 @@ async fn main() -> Result<()> {
     Some(Commands::Date(cmd)) => {
       handle_date_command(&client, &config, &cmd).await?;
     }
-    Some(Commands::Alert(cmd)) => {
-      handle_alert_command(&client, &config, &cmd).await?;
-    }
     None => {
       if config.edu_code.is_empty() || config.school_code.is_empty() {
         println!("No school set. Use `traytoday set` to set your school.");
       } else {
+        let checker = AllergenChecker::new();
+        let allergen = args.allergen
+          .split(",")
+          .map(|a| a.trim())
+          .map(|a| checker.get_number(a).unwrap_or(0))
+          .collect::<Vec<_>>();
+
         let date = chrono::Local::now().format("%Y%m%d").to_string();
         let meals = client
           .get_meals_for_dates(&config.edu_code, &config.school_code, &[date])
@@ -126,7 +124,7 @@ async fn main() -> Result<()> {
         if meals.is_empty() {
           println!("No meals found for today.");
         }
-        print_meals(&meals, None)?;
+        print_meals(&meals, Some(allergen))?;
       }
     }
   }
@@ -143,23 +141,6 @@ async fn handle_date_command(
     "week" => get_week_dates(),
     date => vec![parse_date(date)?],
   };
-
-  let meals = client
-    .get_meals_for_dates(&config.edu_code, &config.school_code, &dates)
-    .await?;
-
-  print_meals(&meals, None)?;
-
-  Ok(())
-}
-
-async fn handle_alert_command(
-  client: &NeisClient,
-  config: &Config,
-  cmd: &AlertCommand,
-) -> Result<()> {
-  let date = cmd.date.as_deref().unwrap_or("today");
-  let date_str = parse_date(date)?;
   let checker = AllergenChecker::new();
   let allergens = cmd
     .allergen
@@ -167,11 +148,14 @@ async fn handle_alert_command(
     .map(|a| a.trim())
     .map(|a| checker.get_number(a).unwrap_or(0))
     .collect::<Vec<_>>();
+
   let meals = client
-    .get_meals_for_dates(&config.edu_code, &config.school_code, &[date_str])
+    .get_meals_for_dates(&config.edu_code, &config.school_code, &dates)
     .await?;
 
-  print_meals(&meals, Some(allergens))
+  print_meals(&meals, Some(allergens))?;
+
+  Ok(())
 }
 
 fn print_meals(meals: &[Meal], allergens: Option<Vec<u8>>) -> Result<()> {
