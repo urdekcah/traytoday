@@ -8,11 +8,17 @@ cargo install traytoday
 ```  
 
 ## Usage
-TrayToday supports the following commands:
-- **`traytoday search <school name>`**: Search for schools by name. If no API key is provided, only up to five results will be displayed.
-- **`traytoday set <school name>`**: Search for a school, select one from the results, and set it as your default school. Without an API key, results are limited to five.
-- **`traytoday`**: Retrieve the meal information for the currently configured school if no options are specified.
+### Primary Commands
+- **`traytoday search <school name>`**: Conduct an erudite search for educational institutions that match the specified name. Note: Without an API key, results are capped at five entries.
+- **`traytoday set <school name>`**: Search for a school, select from the enumerated results, and designate it as your default institution. As with the search command, the absence of an API key limits results to five options.
+- **`traytoday set-key <api key>`**: Set your API key. If you set an incorrect key, an error will occur when using other command.
+- **`traytoday date <date>`**: Retrieve the meal information for a specific date. (e.g. `traytoday date 2025-02-08`, `traytoday date tomorrow`, `traytoday date week`, `traytoday date mon`)
+- **`traytoday`**: Retrieve the meal information for your currently configured school when no additional arguments are provided.
 
+### Flags
+- **`--allergen <ingredient>`**: Specify the allergenic component to monitor. For example, `traytoday --allergen peanut` will trigger a notification if any meal contains peanuts. (only in: `root`, **`date`**) [See all available allergens](doc/reference/allergens.md)
+
+### Examples
 below is an example of how to use TrayToday:
 ```bash
 $ traytoday set 선린인터넷
@@ -32,4 +38,4 @@ $ traytoday
 ```
 
 ## Contact
-For inquiries or bug reports, please use the [Issues section](https://github.com/urdekcah/traytoday/issues) of the project.  
+For inquiries or bug reports, please use the [Issues section](https://github.com/urdekcah/traytoday/issues) of the project.
