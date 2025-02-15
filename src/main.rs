@@ -135,7 +135,12 @@ async fn handle_date_command(
   let allergens = cmd
     .allergen
     .as_ref()
-    .map(|s| s.split(",").map(|a| a.trim()).map(|a| checker.get_number(a).unwrap_or(0)).collect::<Vec<_>>())
+    .map(|s| {
+      s.split(",")
+        .map(|a| a.trim())
+        .map(|a| checker.get_number(a).unwrap_or(0))
+        .collect::<Vec<_>>()
+    })
     .unwrap_or_else(|| vec![]);
 
   let meals = client
@@ -155,7 +160,12 @@ async fn handle_root_command(client: &NeisClient, args: &Cli, config: &Config) -
     let allergen = args
       .allergen
       .as_ref()
-      .map(|s| s.split(",").map(|a| a.trim()).map(|a| checker.get_number(a).unwrap_or(0)).collect::<Vec<_>>())
+      .map(|s| {
+        s.split(",")
+          .map(|a| a.trim())
+          .map(|a| checker.get_number(a).unwrap_or(0))
+          .collect::<Vec<_>>()
+      })
       .unwrap_or_else(|| vec![]);
 
     let date = chrono::Local::now().format("%Y%m%d").to_string();
@@ -203,7 +213,11 @@ fn print_meals(meals: &[Meal], allergens: Option<Vec<u8>>) -> Result<()> {
       let marked_dish = dish
         .split("<br/>")
         .map(|item| {
-          if allergens.iter().any(|a| item.contains(&format!("{}", a))) {
+          if allergens.iter().any(|allergen| {
+            item
+              .split(|c: char| !c.is_digit(10))
+              .any(|token| token == allergen.to_string())
+          }) {
             format!("\x1b[31m{}\x1b[0m", item)
           } else {
             item.to_string()
