@@ -12,7 +12,7 @@ struct Cli {
   #[command(subcommand)]
   command: Option<Commands>,
   #[arg(long, help = "Allergen to check for")]
-  allergen: String,
+  allergen: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -41,7 +41,7 @@ struct DateCommand {
   #[arg(help = "Date specification (e.g., 2023-10-05, tomorrow, week)")]
   date: String,
   #[arg(long, help = "Allergen to check for")]
-  allergen: String,
+  allergen: Option<String>,
 }
 
 #[tokio::main]
@@ -134,10 +134,14 @@ async fn handle_date_command(
   let checker = AllergenChecker::new();
   let allergens = cmd
     .allergen
-    .split(",")
-    .map(|a| a.trim())
-    .map(|a| checker.get_number(a).unwrap_or(0))
-    .collect::<Vec<_>>();
+    .as_ref()
+    .map(|s| {
+      s.split(",")
+        .map(|a| a.trim())
+        .map(|a| checker.get_number(a).unwrap_or(0))
+        .collect::<Vec<_>>()
+    })
+    .unwrap_or_else(|| vec![]);
 
   let meals = client
     .get_meals_for_dates(&config.edu_code, &config.school_code, &dates)
@@ -155,10 +159,14 @@ async fn handle_root_command(client: &NeisClient, args: &Cli, config: &Config) -
     let checker = AllergenChecker::new();
     let allergen = args
       .allergen
-      .split(",")
-      .map(|a| a.trim())
-      .map(|a| checker.get_number(a).unwrap_or(0))
-      .collect::<Vec<_>>();
+      .as_ref()
+      .map(|s| {
+        s.split(",")
+          .map(|a| a.trim())
+          .map(|a| checker.get_number(a).unwrap_or(0))
+          .collect::<Vec<_>>()
+      })
+      .unwrap_or_else(|| vec![]);
 
     let date = chrono::Local::now().format("%Y%m%d").to_string();
     let meals = client
@@ -205,7 +213,11 @@ fn print_meals(meals: &[Meal], allergens: Option<Vec<u8>>) -> Result<()> {
       let marked_dish = dish
         .split("<br/>")
         .map(|item| {
-          if allergens.iter().any(|a| item.contains(&format!("{}", a))) {
+          if allergens.iter().any(|allergen| {
+            item
+              .split(|c: char| !c.is_digit(10))
+              .any(|token| token == allergen.to_string())
+          }) {
             format!("\x1b[31m{}\x1b[0m", item)
           } else {
             item.to_string()
