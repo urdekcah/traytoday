@@ -12,7 +12,7 @@ struct Cli {
   #[command(subcommand)]
   command: Option<Commands>,
   #[arg(long, help = "Allergen to check for")]
-  allergen: String,
+  allergen: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -41,7 +41,7 @@ struct DateCommand {
   #[arg(help = "Date specification (e.g., 2023-10-05, tomorrow, week)")]
   date: String,
   #[arg(long, help = "Allergen to check for")]
-  allergen: String,
+  allergen: Option<String>,
 }
 
 #[tokio::main]
@@ -134,10 +134,9 @@ async fn handle_date_command(
   let checker = AllergenChecker::new();
   let allergens = cmd
     .allergen
-    .split(",")
-    .map(|a| a.trim())
-    .map(|a| checker.get_number(a).unwrap_or(0))
-    .collect::<Vec<_>>();
+    .as_ref()
+    .map(|s| s.split(",").map(|a| a.trim()).map(|a| checker.get_number(a).unwrap_or(0)).collect::<Vec<_>>())
+    .unwrap_or_else(|| vec![]);
 
   let meals = client
     .get_meals_for_dates(&config.edu_code, &config.school_code, &dates)
@@ -155,10 +154,9 @@ async fn handle_root_command(client: &NeisClient, args: &Cli, config: &Config) -
     let checker = AllergenChecker::new();
     let allergen = args
       .allergen
-      .split(",")
-      .map(|a| a.trim())
-      .map(|a| checker.get_number(a).unwrap_or(0))
-      .collect::<Vec<_>>();
+      .as_ref()
+      .map(|s| s.split(",").map(|a| a.trim()).map(|a| checker.get_number(a).unwrap_or(0)).collect::<Vec<_>>())
+      .unwrap_or_else(|| vec![]);
 
     let date = chrono::Local::now().format("%Y%m%d").to_string();
     let meals = client
